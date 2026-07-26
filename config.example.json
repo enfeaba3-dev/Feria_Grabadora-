@@ -1,0 +1,21 @@
+{
+  "model":"large-v3-turbo",
+  "language":"es",
+  "device":"cuda",
+  "dictation":{
+    "enabled":true,
+    "hotkey":"f8",
+    "chunk_seconds":3.0,
+    "input_device":null,
+    "copy_to_clipboard":true,
+    "auto_paste":true,
+    "paste_delay_ms":180,
+    "show_overlay":true,
+    "overlay_position":"bottom-center",
+    "restore_focus":true
+  },
+  "web":{
+    "live_chunk_seconds":6.0,
+    "open_browser":true
+  }
+}

@@ -1,0 +1,22 @@
+---
+name: Feature request
+about: Sugerir una nueva funcionalidad
+title: '[FEATURE] '
+labels: enhancement
+assignees: ''
+---
+
+## Resumen
+<!-- Una descripción breve de la funcionalidad propuesta -->
+
+## Motivación
+<!-- ¿Qué problema resuelve? ¿Por qué es útil? -->
+
+## Solución propuesta
+<!-- Cómo imaginas que funcionaría -->
+
+## Alternativas consideradas
+<!-- Otros enfoques que se te ocurrieron -->
+
+## Capturas / mockups
+<!-- Si tienes ideas visuales -->

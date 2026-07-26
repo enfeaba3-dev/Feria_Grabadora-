@@ -1,0 +1,31 @@
+---
+name: Bug report
+about: Algo no funciona correctamente
+title: '[BUG] '
+labels: bug
+assignees: ''
+---
+
+## Descripción del problema
+<!-- Una descripción clara y concisa del bug -->
+
+## Pasos para reproducir
+1. 
+2. 
+3. 
+
+## Comportamiento esperado
+<!-- Qué debería haber pasado -->
+
+## Captura de pantalla / log
+<!-- Si aplica, adjunta screenshot o el contenido de logs\app.log -->
+
+## Entorno
+- Windows: [10/11]
+- Python: [3.10/3.11/3.12]
+- GPU: [NVIDIA modelo / CPU]
+- Versión: [de CHANGELOG.md o VERSION]
+- Modelo: [tiny/base/small/medium/large-v3-turbo/...]
+
+## Información adicional
+<!-- Cualquier otro contexto relevante -->

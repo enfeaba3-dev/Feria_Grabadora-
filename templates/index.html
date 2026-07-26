@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080b14">
+  <title>Feria Transcriber</title>
+  <link rel="stylesheet" href="{{ url_for('static',filename='css/styles.css') }}">
+</head>
+<body>
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+
+  <div class="app-layout">
+    <aside class="sidebar">
+      <a class="brand" href="#dictation" aria-label="Feria Transcriber">
+        <span class="brand-orb">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/></svg>
+        </span>
+        <span><strong>Feria</strong><small>Transcriber 3.0</small></span>
+      </a>
+
+      <nav class="nav-list" aria-label="Secciones">
+        <button class="nav-item active" data-view="dictation">
+          <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/></svg>
+          <span>Dictado global</span><i></i>
+        </button>
+        <button class="nav-item" data-view="transcribe">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+          <span>Transcribir</span>
+        </button>
+        <button class="nav-item" data-view="history">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <span>Historial</span>
+        </button>
+        <button class="nav-item" data-view="diagnostics">
+          <svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Diagnóstico</span><b id="diagnosticBadge" class="hidden">!</b>
+        </button>
+      </nav>
+
+      <div class="sidebar-status">
+        <div class="status-dot" id="sidebarDot"></div>
+        <div><strong id="sidebarStatus">Iniciando sistema</strong><span id="sidebarSubstatus">Comprobando…</span></div>
+      </div>
+      <p class="sidebar-foot">Local · Whisper</p>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">LOCAL · PRIVADO · GLOBAL</p>
+          <h1 id="pageTitle">Dictado global</h1>
+        </div>
+        <div class="top-actions">
+          <div class="gpu-pill hidden" id="gpuPill" title="Estado de la GPU">
+            <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+            <div><b id="gpuName">GPU</b><small id="gpuStats">—</small></div>
+          </div>
+          <div class="runtime-pill" id="runtimePill"><span></span><b>Servidor</b><small>Comprobando</small></div>
+          <button class="icon-button" id="themeToggleButton" title="Cambiar tema">
+            <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button class="icon-button" id="refreshButton" title="Actualizar">
+            <svg viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="model-loader-panel hidden" id="modelLoaderPanel">
+        <div class="model-loader-visual">
+          <span class="loader-ring ring-one"></span><span class="loader-ring ring-two"></span><b>F</b>
+        </div>
+        <div class="model-loader-copy">
+          <div class="model-loader-heading"><span id="modelLoaderTitle">Preparando modelo…</span><strong id="modelLoaderPercent">—</strong></div>
+          <p id="modelLoaderDetail">Comprobando los archivos del modelo local.</p>
+          <div class="model-loader-track"><span id="modelLoaderBar"></span></div>
+          <div class="model-loader-meta"><span id="modelLoaderName">large-v3-turbo</span><span id="modelLoaderElapsed">0 s</span></div>
+        </div>
+      </section>
+
+      <section class="view active" id="dictationView">
+        <section class="hero-grid">
+          <div class="hero-copy">
+            <span class="hero-chip">PUSH TO TALK</span>
+            <h2>Habla en cualquier parte.<br><em>El texto aparece donde estás.</em></h2>
+            <p>Mantén pulsada tu tecla global, dicta desde Chrome, Word, WhatsApp Web o cualquier programa y suelta para copiar y pegar automáticamente.</p>
+            <div class="hero-actions">
+              <button class="primary-button" id="saveConfigButton"><span>Guardar y activar</span><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+              <button class="secondary-button" id="restartAgentButton">Reiniciar agente</button>
+            </div>
+          </div>
+          <div class="capsule-showcase">
+            <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+            <div class="capsule-preview">
+              <div class="capsule-logo">F</div>
+              <div class="capsule-copy"><strong>Feria Dictation</strong><span id="capsuleState">Mantén pulsado para hablar</span></div>
+              <div class="mini-wave" id="miniWave"></div>
+              <kbd id="hotkeyDisplay">F8</kbd>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="card settings-card">
+            <div class="card-heading">
+              <div><span class="section-number">01</span><h3>Activación global</h3></div>
+              <label class="switch"><input type="checkbox" id="dictationEnabled"><span></span></label>
+            </div>
+            <div class="settings-card-content">
+              <div class="field-grid two">
+                <div class="field-group">
+                  <label for="hotkeyInput">Tecla de dictado</label>
+                  <div class="hotkey-control">
+                    <input id="hotkeyInput" value="f8" readonly>
+                    <button id="captureHotkeyButton">Capturar</button>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <label for="inputDeviceSelect">Micrófono</label>
+                  <div class="select-shell"><select id="inputDeviceSelect"><option value="">Predeterminado del sistema</option></select></div>
+                  <small id="microphoneHint">Detectando…</small>
+                </div>
+              </div>
+              <div class="field-grid three">
+                <div class="field-group"><label for="globalModelSelect">Modelo</label><div class="select-shell"><select id="globalModelSelect">
+                  {% for model in models %}<option value="{{ model.id }}">{{ model.name }}</option>{% endfor %}
+                </select></div></div>
+                <div class="field-group"><label for="globalLanguageSelect">Idioma</label><div class="select-shell"><select id="globalLanguageSelect">
+                  <option value="">Auto</option><option value="es">Español</option><option value="en">English</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="it">Italiano</option><option value="pt">Português</option>
+                </select></div></div>
+                <div class="field-group"><label for="globalDeviceSelect">Procesamiento</label><div class="select-shell"><select id="globalDeviceSelect">
+                  <option value="auto">Auto</option><option value="cuda">GPU</option><option value="cpu">CPU</option>
+                </select></div></div>
+              </div>
+              <div class="toggle-list">
+                <label><span><strong>Pegar auto</strong><small>Ctrl + V al soltar</small></span><input type="checkbox" id="autoPasteToggle"><i></i></label>
+                <label><span><strong>Copiar</strong><small>Siempre al portapapeles</small></span><input type="checkbox" id="clipboardToggle"><i></i></label>
+                <label><span><strong>Cápsula</strong><small>Mostrar al dictar</small></span><input type="checkbox" id="overlayToggle"><i></i></label>
+              </div>
+            </div>
+          </article>
+
+          <aside class="card live-status-card">
+            <div class="card-heading compact">
+              <div><span class="section-number">02</span><h3>Estado en vivo</h3></div>
+              <span class="live-badge" id="agentBadge"><i></i>Iniciando</span>
+            </div>
+            <div class="live-status-card-content">
+              <div class="status-visual">
+                <div class="status-ring"><div><span id="statusIcon">F</span></div></div>
+                <strong id="agentTitle">Preparando agente</strong>
+                <p id="agentDescription">La aplicación está registrando la tecla global.</p>
+              </div>
+              <dl class="status-list">
+                <div><dt>Tecla</dt><dd id="statusHotkey">F8</dd></div>
+                <div><dt>Modelo</dt><dd id="statusModel">large-v3-turbo</dd></div>
+                <div><dt>Motor</dt><dd id="statusDevice">Automático</dd></div>
+                <div><dt>Latido</dt><dd id="statusHeartbeat">—</dd></div>
+              </dl>
+              <div class="info-banner">
+                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+                <span><strong>Privado</strong>Audio procesado localmente.</span>
+              </div>
+            </div>
+          </aside>
+        </section>
+      </section>
+
+      <section class="view" id="transcribeView">
+        <div class="transcribe-grid">
+          <aside class="card compact-settings">
+            <div class="card-heading"><div><span class="section-number">01</span><h3>Motor</h3></div></div>
+            <div class="compact-settings-content">
+              <div class="field-group"><label for="modelSelect">Modelo</label><div class="select-shell"><select id="modelSelect">{% for model in models %}<option value="{{ model.id }}">{{ model.name }}</option>{% endfor %}</select></div></div>
+              <div class="field-group"><label for="languageSelect">Idioma</label><div class="select-shell"><select id="languageSelect"><option value="">Auto</option><option value="es">Español</option><option value="en">English</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="it">Italiano</option><option value="pt">Português</option></select></div></div>
+              <div class="field-group"><label for="deviceSelect">Procesamiento</label><div class="select-shell"><select id="deviceSelect"><option value="auto">Auto</option><option value="cuda">GPU</option><option value="cpu">CPU</option></select></div></div>
+              <div class="field-group"><label for="webMicSelect">Micrófono (web)</label><div class="select-shell"><select id="webMicSelect"><option value="">Predeterminado</option></select></div><small id="webMicHint" class="field-help">Detectando…</small></div>
+              <div class="model-note"><span></span><p><strong>Primera vez</strong>El modelo puede tardar mientras se descarga.</p></div>
+            </div>
+          </aside>
+
+          <article class="card recorder-card">
+            <div class="mode-tabs"><button class="active" data-mode="record">Micrófono</button><button data-mode="file">Archivo</button></div>
+            <div class="recorder-mode active" id="recordMode">
+              <div class="recorder-head"><span id="recordingLabel"><i></i>Preparado</span><time id="timer">00:00</time></div>
+              <div class="waveform" id="waveform"></div>
+              <button class="record-button" id="recordButton"><span></span><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+              <p id="recordHint">Pulsa para empezar a grabar.</p>
+            </div>
+            <div class="recorder-mode" id="fileMode">
+              <div class="dropzone" id="dropzone"><input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.m4a,.mp4,.flac,.ogg,.aac,.wma,.mov,.mkv">
+                <div class="drop-icon"><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg></div>
+                <h3>Arrastra audio o vídeo</h3>
+                <p>MP3, WAV, M4A, MP4, OGG, FLAC</p>
+                <span>Hasta 1,5 GB</span>
+              </div>
+              <div class="selected-file hidden" id="selectedFile">
+                <div><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
+                <span><strong id="fileName"></strong><small id="fileSize"></small></span>
+                <button id="removeFile">×</button>
+              </div>
+              <div style="padding:0 12px 12px">
+                <button class="primary-button full" id="transcribeFileButton" disabled>Transcribir archivo</button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <article class="card transcript-card">
+          <div class="card-heading">
+            <div><span class="section-number">02</span><h3>Resultado</h3></div>
+            <div class="inline-actions">
+              <button id="cancelButton" class="cancel-btn hidden">Cancelar</button>
+              <button id="clearButton">Limpiar</button>
+              <button id="copyButton">Copiar</button>
+              <button id="downloadTxtButton">TXT</button>
+              <button id="downloadPdfButton">PDF</button>
+              <button id="downloadDocxButton">Word</button>
+            </div>
+          </div>
+          <div class="transcript-card-content">
+            <div class="result-meta">
+              <span id="statusChip"><i></i>Esperando audio</span>
+              <span id="modelChip">large-v3-turbo</span>
+              <span id="deviceChip">Auto</span>
+              <span id="modelLoading" class="model-loading hidden"><span class="loading-spinner"></span>Descargando modelo…</span>
+            </div>
+            <div class="transcript-text empty" id="transcriptText" contenteditable="true" spellcheck="true" data-placeholder="La transcripción aparecerá aquí. Puedes corregirla, copiarla o descargarla."></div>
+            <div class="progress-track"><span id="progressLine"></span><span id="progressPercent" class="progress-pct">0%</span></div>
+            <div class="alert error hidden" id="errorMessage"></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="view" id="historyView">
+        <section class="card history-hero">
+          <div>
+            <h2>Historial de transcripciones</h2>
+            <p>Todas se guardan automáticamente. Busca, abre o elimina cualquier entrada.</p>
+          </div>
+          <div class="history-actions">
+            <input type="search" id="historySearch" placeholder="Buscar en el historial..." class="history-search">
+            <button class="secondary-button" id="refreshHistoryButton">Actualizar</button>
+          </div>
+        </section>
+        <div class="history-list" id="historyList">
+          <div class="empty-state">Cargando historial…</div>
+        </div>
+      </section>
+
+      <section class="view" id="diagnosticsView">
+        <section class="card diagnostics-hero">
+          <div>
+            <h2>Centro de soporte</h2>
+            <p>Comprueba Python, Whisper, FFmpeg, CUDA, micrófono, permisos, espacio y dependencias.</p>
+          </div>
+          <div class="diagnostic-actions">
+            <button class="primary-button" id="runDiagnosticsButton">Ejecutar diagnóstico</button>
+            <a class="secondary-button" href="/api/support-bundle">Soporte ZIP</a>
+            <button class="secondary-button" id="openLogsButton">Abrir logs</button>
+          </div>
+        </section>
+        <section class="diagnostic-summary">
+          <article class="metric"><span>Estado</span><strong id="diagStatus">—</strong><small>Sin ejecutar</small></article>
+          <article class="metric"><span>Errores</span><strong id="diagErrors">—</strong></article>
+          <article class="metric"><span>Avisos</span><strong id="diagWarnings">—</strong></article>
+          <article class="metric"><span>Pruebas</span><strong id="diagChecks">—</strong></article>
+        </section>
+        <section class="diagnostics-grid">
+          <article class="card checks-card">
+            <div class="card-heading"><div><span class="section-number">01</span><h3>Comprobaciones</h3></div></div>
+            <div class="check-list" id="diagnosticList"><div class="empty-state">Sin ejecutar todavía.</div></div>
+          </article>
+          <article class="card log-card">
+            <div class="card-heading"><div><span class="section-number">02</span><h3>Logs</h3></div>
+              <div class="log-tabs"><button class="active" data-log="app">App</button><button data-log="agent">Agente</button><button data-log="frontend">Web</button><button data-log="install">Instalación</button></div>
+            </div>
+            <pre id="logViewer">Esperando logs…</pre>
+            <button class="secondary-button" id="refreshLogsButton">Actualizar logs</button>
+          </article>
+        </section>
+      </section>
+
+      <footer><span>Feria Transcriber 3.0</span><i></i><span>Whisper local</span><i></i><span>Logs rotativos</span></footer>
+    </main>
+  </div>
+
+  <div class="toast-stack" id="toastStack"></div>
+  <script>window.FERIA_BOOTSTRAP={{ config|tojson }};</script>
+  <script src="{{ url_for('static',filename='js/app.js') }}"></script>
+</body>
+</html>

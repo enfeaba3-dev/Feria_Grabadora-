@@ -1,0 +1,17 @@
+---
+name: Pregunta
+about: Hacer una pregunta sobre el proyecto
+title: '[QUESTION] '
+labels: question
+assignees: ''
+---
+
+## Pregunta
+<!-- Tu pregunta clara y concisa -->
+
+## Contexto
+<!-- Qué intentaste hacer, qué has probado -->
+
+## Entorno
+- Windows: 
+- Versión: 

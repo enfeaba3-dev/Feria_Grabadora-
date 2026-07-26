@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  lint:
+    name: Python syntax check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Python
+        run: python -m compileall -q .
+
+  install:
+    name: Install dependencies
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Create venv
+        run: python -m venv .venv
+      - name: Install requirements
+        run: .venv\Scripts\python.exe -m pip install -r requirements.txt
+      - name: Verify imports
+        run: .venv\Scripts\python.exe -c "import flask, waitress, faster_whisper, ctranslate2, imageio_ffmpeg, sounddevice, requests, keyboard, docx, fpdf2; print('All imports OK')"
+
+  release:
+    name: Build release zip
+    runs-on: windows-latest
+    needs: [lint, install]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create zip
+        run: |
+          Compress-Archive -Path * -DestinationPath FeriaTranscriber.zip -Force -Exclude .venv,logs,__pycache__,runtime,config.json,transcripciones,*.pyc,test_*.wav,*.log
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FeriaTranscriber
+          path: FeriaTranscriber.zip

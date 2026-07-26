@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.egg-info
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and runtime
+logs/
+*.log
+runtime/
+*.pid
+
+# User config and transcriptions
+config.json
+transcripciones/
+history/
+
+# Whisper model cache
+models/
+*.bin
+*.pt
+*.pth
+
+# Temporary files
+temp/
+*.tmp
+*.wav
+*.mp3
+*.m4a
+test_*.wav
+audio_prueba.*
+
+# HuggingFace cache
+hf_cache/
+.cache/
+
+# Build artifacts
+*.zip
+*.tar.gz
+*.egg-info
+build/
+dist/
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Windows
+$RECYCLE.BIN/
+*.lnk
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
