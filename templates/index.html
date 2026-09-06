@@ -189,19 +189,27 @@
               <p id="recordHint">Pulsa para empezar a grabar.</p>
             </div>
             <div class="recorder-mode" id="fileMode">
-              <div class="dropzone" id="dropzone"><input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.m4a,.mp4,.flac,.ogg,.aac,.wma,.mov,.mkv">
+              <div class="dropzone" id="dropzone"><input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.m4a,.mp4,.flac,.ogg,.aac,.wma,.mov,.mkv"><input type="file" id="folderInput" webkitdirectory multiple>
                 <div class="drop-icon"><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg></div>
                 <h3>Arrastra audio o vídeo</h3>
                 <p>MP3, WAV, M4A, MP4, OGG, FLAC</p>
-                <span>Hasta 1,5 GB</span>
+                <span>Hasta 1,5 GB por archivo</span>
               </div>
               <div class="selected-file hidden" id="selectedFile">
                 <div><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
                 <span><strong id="fileName"></strong><small id="fileSize"></small></span>
                 <button id="removeFile">×</button>
               </div>
+              <div class="batch-actions">
+                <button class="secondary-button" id="chooseFolderButton">Seleccionar carpeta</button>
+                <button class="secondary-button" id="addFilesButton">Añadir más archivos</button>
+              </div>
+              <div class="file-list hidden" id="fileList">
+                <div class="file-list-head"><strong id="fileListTitle">Archivos (0)</strong><button id="clearFiles" class="clear-files">Quitar todos</button></div>
+                <ul id="fileListItems"></ul>
+              </div>
               <div style="padding:0 12px 12px">
-                <button class="primary-button full" id="transcribeFileButton" disabled>Transcribir archivo</button>
+                <button class="primary-button full" id="transcribeFileButton" disabled>Transcribir (0)</button>
               </div>
             </div>
           </article>
@@ -287,7 +295,10 @@
   </div>
 
   <div class="toast-stack" id="toastStack"></div>
-  <script>window.FERIA_BOOTSTRAP={{ config|tojson }};</script>
+  <script>
+    window.FERIA_BOOTSTRAP={{ config|tojson }};
+    window.FERIA_CSRF={header:"{{ csrf_header }}",field:"{{ csrf_field }}"};
+  </script>
   <script src="{{ url_for('static',filename='js/app.js') }}"></script>
 </body>
 </html>

@@ -38,6 +38,12 @@ config.json
 transcripciones/
 history/
 
+# Internal security token (generated at first run)
+runtime/internal_token
+runtime/agent_state.json
+runtime/server.json
+runtime/.launcher.lock
+
 # Whisper model cache
 models/
 *.bin

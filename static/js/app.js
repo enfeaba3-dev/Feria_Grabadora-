@@ -4,10 +4,33 @@ const $=selector=>document.querySelector(selector);
 const $$=selector=>[...document.querySelectorAll(selector)];
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
+function readCookie(name){
+  const target=name+'=';
+  for(const part of document.cookie.split(';')){
+    const trimmed=part.trim();
+    if(trimmed.startsWith(target))return decodeURIComponent(trimmed.slice(target.length));
+  }
+  return '';
+}
+function csrfHeaders(){
+  const token=readCookie('feria_csrf');
+  const header=(window.FERIA_CSRF&&window.FERIA_CSRF.header)||'X-CSRF-Token';
+  return token?{[header]:token}:{};
+}
+function withCsrf(options={}){
+  const method=String(options.method||'GET').toUpperCase();
+  if(['POST','PUT','PATCH','DELETE'].includes(method)){
+    const headers=Object.assign({},options.headers||{},csrfHeaders());
+    return Object.assign({},options,{headers,credentials:'same-origin'});
+  }
+  return Object.assign({credentials:'same-origin'},options);
+}
+
 let config=structuredClone(window.FERIA_BOOTSTRAP||{});
 let activeLog='app';
 let hotkeyCapture=false;
 let selectedFile=null;
+let batchFiles=[];
 let stream=null;
 let recorder=null;
 let audioContext=null;
@@ -34,8 +57,9 @@ const elements={
   agentDescription:$('#agentDescription'),statusHotkey:$('#statusHotkey'),statusModel:$('#statusModel'),statusDevice:$('#statusDevice'),statusHeartbeat:$('#statusHeartbeat'),
   modelSelect:$('#modelSelect'),languageSelect:$('#languageSelect'),deviceSelect:$('#deviceSelect'),
   recordButton:$('#recordButton'),recordingLabel:$('#recordingLabel'),timer:$('#timer'),waveform:$('#waveform'),recordHint:$('#recordHint'),
-  fileInput:$('#fileInput'),dropzone:$('#dropzone'),selectedFileBox:$('#selectedFile'),fileName:$('#fileName'),fileSize:$('#fileSize'),
+  fileInput:$('#fileInput'),folderInput:$('#folderInput'),dropzone:$('#dropzone'),selectedFileBox:$('#selectedFile'),fileName:$('#fileName'),fileSize:$('#fileSize'),
   removeFile:$('#removeFile'),transcribeFileButton:$('#transcribeFileButton'),
+  chooseFolderButton:$('#chooseFolderButton'),addFilesButton:$('#addFilesButton'),fileList:$('#fileList'),fileListTitle:$('#fileListTitle'),fileListItems:$('#fileListItems'),clearFiles:$('#clearFiles'),
   transcriptText:$('#transcriptText'),statusChip:$('#statusChip'),modelChip:$('#modelChip'),deviceChip:$('#deviceChip'),
   progressLine:$('#progressLine'),progressPercent:$('#progressPercent'),errorMessage:$('#errorMessage'),clearButton:$('#clearButton'),copyButton:$('#copyButton'),downloadTxtButton:$('#downloadTxtButton'),downloadPdfButton:$('#downloadPdfButton'),downloadDocxButton:$('#downloadDocxButton'),cancelButton:$('#cancelButton'),modelLoading:$('#modelLoading'),
   modelLoaderPanel:$('#modelLoaderPanel'),modelLoaderTitle:$('#modelLoaderTitle'),modelLoaderDetail:$('#modelLoaderDetail'),modelLoaderName:$('#modelLoaderName'),modelLoaderElapsed:$('#modelLoaderElapsed'),modelLoaderBar:$('#modelLoaderBar'),modelLoaderPercent:$('#modelLoaderPercent'),
@@ -48,7 +72,9 @@ const elements={
 
 function clientLog(level,message,context={}){
   try{
-    const payload=JSON.stringify({level,message,context:{...context,url:location.href,userAgent:navigator.userAgent}});
+    const csrfField=(window.FERIA_CSRF&&window.FERIA_CSRF.field)||'csrf_token';
+    const csrfToken=readCookie('feria_csrf');
+    const payload=JSON.stringify({level,message,context:{...context,url:location.href,userAgent:navigator.userAgent},[csrfField]:csrfToken});
     navigator.sendBeacon('/api/client-log',new Blob([payload],{type:'application/json'}));
   }catch{}
 }
@@ -69,7 +95,7 @@ window.addEventListener('error',event=>clientLog('error',event.message,{source:e
 window.addEventListener('unhandledrejection',event=>clientLog('error','Promise rechazada',{reason:String(event.reason),stack:event.reason?.stack}));
 
 async function fetchJson(url,options={}){
-  const response=await fetch(url,options);
+  const response=await fetch(url,withCsrf(options));
   let data;
   try{data=await response.json();}
   catch{throw new Error(`Respuesta no válida del servidor (${response.status}).`);}
@@ -450,6 +476,8 @@ async function transcribeBlob(blob,mode,filename,onProgress){
       };
       xhr.onerror=()=>reject(new Error('Error de conexión.'));
       xhr.open('POST','/api/transcribe');
+      const csrf=csrfHeaders();
+      for(const key in csrf)xhr.setRequestHeader(key,csrf[key]);
       signal.addEventListener('abort',()=>{xhr.abort();reject(new DOMException('Cancelado','AbortError'));});
       xhr.send(form);
     });
@@ -477,17 +505,137 @@ $$('.mode-tabs button').forEach(button=>button.addEventListener('click',()=>{
 
 function chooseFile(file){
   if(!file)return;selectedFile=file;elements.fileName.textContent=file.name;elements.fileSize.textContent=formatBytes(file.size);
-  elements.selectedFileBox.classList.remove('hidden');elements.transcribeFileButton.disabled=false;
+  elements.selectedFileBox.classList.remove('hidden');
+  updateTranscribeButton();
+}
+
+function updateBatchList(){
+  const totalSize=batchFiles.reduce((acc,f)=>acc+(f.size||0),0);
+  elements.fileList.style.display=batchFiles.length?'block':'none';
+  elements.fileList.classList.remove('hidden');
+  elements.fileListTitle.textContent=`Archivos (${batchFiles.length}) · ${formatBytes(totalSize)}`;
+  elements.fileListItems.innerHTML='';
+  batchFiles.forEach((f,idx)=>{
+    const li=document.createElement('li');
+    const name=document.createElement('span');
+    name.className='file-item-name';name.textContent=f.displayName||f.name;name.title=f.displayName||f.name;
+    const size=document.createElement('small');
+    size.textContent=formatBytes(f.size||0);
+    const rm=document.createElement('button');
+    rm.className='file-item-remove';rm.textContent='×';rm.title='Quitar';
+    rm.addEventListener('click',()=>{
+      batchFiles.splice(idx,1);
+      if(batchFiles.length===0){
+        elements.fileList.classList.add('hidden');elements.fileList.style.display='none';
+        elements.transcribeFileButton.classList.remove('hidden');
+      }
+      updateBatchList();updateTranscribeButton();
+    });
+    li.append(name,size,rm);
+    elements.fileListItems.appendChild(li);
+  });
+  updateTranscribeButton();
+}
+
+function updateTranscribeButton(){
+  const hasAny=batchFiles.length>0||!!selectedFile;
+  elements.transcribeFileButton.disabled=!hasAny||transcribiendo;
+  if(batchFiles.length>0){
+    elements.transcribeFileButton.textContent=`Transcribir ${batchFiles.length} archivo${batchFiles.length===1?'':'s'}`;
+    elements.fileList.classList.add('hidden');elements.fileList.style.display='block';
+  }else{
+    elements.transcribeFileButton.textContent=selectedFile?'Transcribir archivo':'Transcribir (0)';
+  }
+}
+
+function addToBatch(fileList){
+  if(!fileList||!fileList.length)return;
+  const seen=new Set(batchFiles.map(f=>f.displayName||f.name));
+  const webkit=f=>!!f.webkitRelativePath;
+  [...fileList].forEach(f=>{
+    const displayName=f.webkitRelativePath?f.webkitRelativePath.replace(/\\/g,'/'):f.name;
+    if(seen.has(displayName))return;
+    const wrapped={name:f.name,displayName,size:f.size,file:f};
+    batchFiles.push(wrapped);
+    seen.add(displayName);
+  });
+  if(batchFiles.length)updateBatchList();
+}
+
+function renderBatchResults(data){
+  if(!data)return;
+  const lines=[];
+  const clean=name=>name.split('/').pop();
+  data.results.forEach(r=>{
+    if(r.ok&&r.text)lines.push(`\n══ ${r.name} ══\n${r.text.trim()}`);
+  });
+  lines.push(`\n\nResumen: ${data.completed}/${data.total_files} transcritos · ${data.total_seconds}s`);
+  if(data.skipped&&data.skipped.length){
+    lines.push(`\nOmitidos (${data.skipped.length}):\n${data.skipped.map(s=>`- ${clean(s.name)}: ${s.reason}`).join('\n')}`);
+  }
+  if(data.errors&&data.errors.length){
+    lines.push(`\nCon errores (${data.errors.length}):\n${data.errors.map(e=>`- ${clean(e.name)}: ${e.reason}`).join('\n')}`);
+  }
+  setTranscript(lines.join('\n').replace(/^\n+|\n+$/g,''));
+  applyMetadata(data.results.length?data.results[data.results.length-1]:{model:elements.modelSelect.value,device:'auto'});
+  setTranscriptionStatus(
+    data.completed?`${data.completed} archivos completados en ${data.total_seconds}s`:'Nada transcrito',
+    data.completed?'done':(data.errors.length||data.skipped.length?'failed':'idle')
+  );
 }
 
 elements.dropzone.addEventListener('click',()=>elements.fileInput.click());
-elements.fileInput.addEventListener('change',()=>chooseFile(elements.fileInput.files[0]));
+elements.fileInput.addEventListener('change',()=>chooseFile(elements.fileInput.files&&elements.fileInput.files[0]));
+elements.folderInput.addEventListener('change',()=>{addToBatch(elements.folderInput.files);elements.folderInput.value='';});
+elements.chooseFolderButton.addEventListener('click',()=>elements.folderInput.click());
+elements.addFilesButton.addEventListener('click',()=>elements.fileInput.click());
+elements.clearFiles.addEventListener('click',()=>{batchFiles=[];elements.fileList.classList.add('hidden');elements.fileList.style.display='none';updateTranscribeButton();});
 ['dragenter','dragover'].forEach(type=>elements.dropzone.addEventListener(type,event=>{event.preventDefault();elements.dropzone.classList.add('dragging');}));
 ['dragleave','drop'].forEach(type=>elements.dropzone.addEventListener(type,event=>{event.preventDefault();elements.dropzone.classList.remove('dragging');}));
-elements.dropzone.addEventListener('drop',event=>chooseFile(event.dataTransfer.files[0]));
-elements.removeFile.addEventListener('click',()=>{selectedFile=null;elements.fileInput.value='';elements.selectedFileBox.classList.add('hidden');elements.transcribeFileButton.disabled=true;});
+elements.dropzone.addEventListener('drop',event=>{
+  const items=event.dataTransfer&&event.dataTransfer.items;
+  if(items&&[...items].some(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry().isDirectory)){
+    addToBatch(event.dataTransfer.files);
+    event.dataTransfer.items.clear();
+    return;
+  }
+  chooseFile(event.dataTransfer.files&&event.dataTransfer.files[0]);
+});
+elements.removeFile.addEventListener('click',()=>{selectedFile=null;elements.fileInput.value='';elements.selectedFileBox.classList.add('hidden');updateTranscribeButton();});
 
 elements.transcribeFileButton.addEventListener('click',async()=>{
+  if(transcribiendo)return;
+  if(batchFiles.length>0){
+    transcribiendo=true;
+    elements.transcribeFileButton.disabled=true;elements.cancelButton.classList.remove('hidden');showTranscriptionError();setTranscript('');
+    const start=Date.now();
+    try{
+      const results=[];
+      let errors=0,skipped=0;
+      const form=new FormData();
+      form.append('model',elements.modelSelect.value);
+      form.append('language',elements.languageSelect.value);
+      form.append('device',elements.deviceSelect.value);
+      batchFiles.forEach(w=>{
+        const name=w.displayName;
+        const copy=new File([w.file],name,{type:w.file.type});
+        form.append('audios',copy,name);
+      });
+      setTranscriptionStatus(`Subiendo ${batchFiles.length} archivos…`,'working',5);
+      const data=await fetchJson('/api/transcribe-batch',{method:'POST',body:form});
+      renderBatchResults(data);
+      if(data.results&&data.results.length){
+        try{await fetchJson('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'Feria Transcriber',message:`${data.completed} transcripciones listas`})});}catch(e){}
+      }
+    }catch(error){
+      showTranscriptionError(error.message);
+      setTranscriptionStatus('No se pudo transcribir el lote','failed');clientLog('error','Falló lote',{error:error.message});
+    }finally{
+      transcribiendo=false;
+      elements.transcribeFileButton.disabled=false;elements.cancelButton.classList.add('hidden');
+    }
+    return;
+  }
   if(!selectedFile)return;
   elements.transcribeFileButton.disabled=true;elements.cancelButton.classList.remove('hidden');showTranscriptionError();setTranscript('');setTranscriptionStatus('Subiendo archivo…','working',0);
   try{

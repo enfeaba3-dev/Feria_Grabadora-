@@ -77,6 +77,22 @@ class ModelService:
                 "Faltan dependencias de Whisper. Ejecuta instalar.bat y revisa logs/install.log."
             ) from exc
 
+    @staticmethod
+    def _cublas_hint(exc: Exception) -> str:
+        msg = str(exc).lower()
+        if "cublas" in msg:
+            return (
+                "CTranslate2 no encontro cublas64_12.dll. Instala el paquete "
+                "pip 'nvidia-cublas-cu12' (ya viene en requirements.txt) o "
+                "agrega el CUDA 12 toolkit a PATH. Ver README.md seccion CUDA."
+            )
+        if "cudnn" in msg:
+            return (
+                "CTranslate2 no encontro cudnn64_8.dll. Instala el paquete pip "
+                "'nvidia-cudnn-cu12' o agrega el CUDA 12 toolkit a PATH."
+            )
+        return ""
+
     def _set_state(self, **updates: Any) -> None:
         with self._state_lock:
             self._warmup_state.update(updates)
@@ -198,13 +214,16 @@ class ModelService:
                     model_name, device=target_device, compute_type=compute_type
                 )
             except Exception as exc:
+                hint = self._cublas_hint(exc)
+                if hint:
+                    LOGGER.error("Carga GPU fallo: %s", hint)
                 if target_device != "cuda":
                     LOGGER.exception("No se pudo cargar el modelo en CPU")
                     self._set_state(
                         state="error",
                         stage="error",
                         message="No se pudo cargar el modelo",
-                        detail=str(exc),
+                        detail=(hint + " | " if hint else "") + str(exc),
                         progress=0,
                         indeterminate=False,
                         finished_at=time.time(),

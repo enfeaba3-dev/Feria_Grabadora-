@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -85,6 +86,17 @@ from config_manager import (
 )
 from diagnostics import create_support_bundle, run_diagnostics
 from model_service import ModelService
+import security
+from security import (
+    CSRF_FIELD,
+    CSRF_HEADER,
+    INTERNAL_HEADER,
+    apply_security_headers,
+    csrf_protect,
+    ensure_session,
+    init_internal_token,
+    rate_limit,
+)
 
 AVAILABLE_MODELS = [
     {"id": "tiny", "name": "Tiny", "hint": "Velocidad máxima", "size": "~75 MB"},
@@ -108,6 +120,10 @@ AVAILABLE_MODELS = [
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 1536 * 1024 * 1024
+# The dictation agent runs as a child process and calls the API directly.
+# It cannot carry a browser session cookie, so we mint a shared secret
+# stored in the runtime folder and accept it as an alternative to CSRF.
+init_internal_token(RUNTIME_DIR / "internal_token")
 model_service = ModelService()
 
 
@@ -199,6 +215,8 @@ class AgentController:
                 str(AGENT_STATE_PATH),
                 "--config-path",
                 str(CONFIG_PATH),
+                "--internal-token",
+                security.get_internal_token() or "",
             ]
             LOGGER.info("Iniciando agente | command=%s", command)
             creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -323,6 +341,8 @@ def after_request(response):
     )
     response.headers["X-Request-ID"] = getattr(g, "request_id", "")
     response.headers["Cache-Control"] = "no-store"
+    apply_security_headers(response)
+    ensure_session(response)
     LOGGER.info(
         "HTTP done | id=%s | %s %s | status=%s | ms=%s",
         getattr(g, "request_id", ""),
@@ -337,7 +357,14 @@ def after_request(response):
 @app.get("/")
 def index():
     config = load_config()
-    return render_template("index.html", models=AVAILABLE_MODELS, config=config)
+    return render_template(
+        "index.html",
+        models=AVAILABLE_MODELS,
+        config=config,
+        csrf_token=getattr(g, "csrf_token", ""),
+        csrf_header=CSRF_HEADER,
+        csrf_field=CSRF_FIELD,
+    )
 
 
 @app.get("/api/status")
@@ -345,7 +372,7 @@ def api_status():
     return jsonify(
         {
             "ready": True,
-            "version": "2.2.0",
+            "version": "3.0.0",
             "platform": sys.platform,
             "config": load_config(),
             "model": model_service.status(),
@@ -361,6 +388,8 @@ def api_get_config():
 
 
 @app.put("/api/config")
+@csrf_protect
+@rate_limit
 def api_save_config():
     candidate = request.get_json(silent=True)
     if not isinstance(candidate, dict):
@@ -391,6 +420,8 @@ def api_save_config():
 
 
 @app.post("/api/agent/<action>")
+@csrf_protect
+@rate_limit
 def api_agent_action(action: str):
     if action == "start":
         result = agent_controller.start()
@@ -406,6 +437,8 @@ def api_agent_action(action: str):
 
 
 @app.post("/api/model/warmup")
+@csrf_protect
+@rate_limit
 def api_model_warmup():
     data = request.get_json(silent=True) or {}
     config = load_config()
@@ -457,6 +490,8 @@ def api_audio_devices():
 
 
 @app.post("/api/transcribe")
+@csrf_protect
+@rate_limit
 def transcribe():
     if "audio" not in request.files:
         return error_response("AUDIO_MISSING", "No se recibió ningún audio.", 400)
@@ -482,6 +517,29 @@ def transcribe():
         device = "auto"
     safe_name = secure_filename(audio_file.filename) or "audio.bin"
     suffix = Path(safe_name).suffix.lower() or ".bin"
+    _ALLOWED_SUFFIXES = {
+        ".wav",
+        ".mp3",
+        ".m4a",
+        ".mp4",
+        ".flac",
+        ".ogg",
+        ".aac",
+        ".wma",
+        ".mov",
+        ".mkv",
+        ".webm",
+        ".opus",
+        ".amr",
+        ".3gp",
+        ".bin",
+    }
+    if suffix not in _ALLOWED_SUFFIXES:
+        return error_response(
+            "AUDIO_TYPE_DENIED",
+            f"Formato de audio no permitido: {suffix}",
+            415,
+        )
     started = time.perf_counter()
     LOGGER.info(
         "Audio recibido | id=%s | name=%s | mode=%s | model=%s | language=%s | device=%s",
@@ -560,6 +618,124 @@ def transcribe():
         )
 
 
+_ALLOWED_BATCH_SUFFIXES = {
+    ".wav", ".mp3", ".m4a", ".mp4", ".flac", ".ogg", ".aac",
+    ".wma", ".mov", ".mkv", ".webm", ".opus", ".amr", ".3gp",
+}
+
+
+def _process_one_file(source: Path, suffix: str, model_name: str,
+                      language: str | None, device: str, mode: str) -> dict:
+    """Transcribe un único archivo, guarda en historial y devuelve el payload."""
+    with tempfile.TemporaryDirectory(prefix="feria_transcriber_batch_") as temp_name:
+        work_dir = Path(temp_name)
+        prepared = prepare_audio(source, work_dir)
+        result = model_service.transcribe(prepared, model_name, language, device, mode)
+    payload = result.__dict__
+    if payload.get("text"):
+        try:
+            hist_item = {
+                "id": uuid.uuid4().hex[:12],
+                "text": payload["text"],
+                "model": model_name,
+                "language": payload.get("language", ""),
+                "device": device,
+                "mode": mode,
+                "duration_seconds": payload.get("total_seconds", 0),
+                "created_at": time.time(),
+                "created_at_iso": datetime.now().isoformat(timespec="seconds"),
+                "char_count": len(payload["text"]),
+            }
+            (HISTORY_DIR / f"{hist_item['id']}.json").write_text(
+                json.dumps(hist_item, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            old = sorted(
+                HISTORY_DIR.glob("*.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            for p in old[HISTORY_MAX:]:
+                p.unlink(missing_ok=True)
+        except Exception:
+            LOGGER.exception("No se pudo guardar en el historial (batch)")
+    return payload
+
+
+@app.post("/api/transcribe-batch")
+@csrf_protect
+@rate_limit
+def transcribe_batch():
+    if "audios" not in request.files:
+        return error_response("AUDIO_MISSING", "No se recibieron audios.", 400)
+    files = request.files.getlist("audios")
+    files = [f for f in files if f and f.filename]
+    if not files:
+        return error_response("AUDIO_EMPTY", "La carpeta no contenía archivos.", 400)
+
+    config = load_config()
+    model_name = request.form.get("model", config["model"]).strip()
+    if model_name not in MODEL_IDS:
+        return error_response("MODEL_INVALID", "El modelo seleccionado no es válido.", 400)
+    language = request.form.get("language", config["language"]).strip().lower() or None
+    if language and not LANGUAGE_PATTERN.fullmatch(language):
+        return error_response("LANGUAGE_INVALID", "El código de idioma no es válido.", 400)
+    device = request.form.get("device", config["device"]).strip().lower()
+    if device not in {"auto", "cpu", "cuda"}:
+        device = "auto"
+
+    started = time.perf_counter()
+    results: list[dict] = []
+    skipped: list[dict] = []
+    errors: list[dict] = []
+
+    for f in files:
+        # El 'filename' enviado por el navegador conserva la ruta relativa
+        # de la carpeta, p. ej. "entrevistas/audio1.mp3". Lo mostramos tal cual
+        # para respetar la estructura de carpetas, y nos quedamos con la
+        # extensión real para validar el tipo.
+        display_name = f.filename.replace("\\", "/").lstrip("/")
+        suffix = Path(display_name).suffix.lower()
+        if suffix not in _ALLOWED_BATCH_SUFFIXES:
+            skipped.append({
+                "name": display_name,
+                "reason": f"Formato no soportado: {suffix or 'sin extensión'}",
+            })
+            continue
+        storage = Path(tempfile.mkdtemp(prefix="feria_batch_item_"))
+        try:
+            source = storage / f"entrada{suffix}"
+            f.save(source)
+            if not source.exists() or source.stat().st_size == 0:
+                errors.append({"name": display_name, "reason": "Archivo vacío"})
+                continue
+            try:
+                payload = _process_one_file(
+                    source, suffix, model_name, language, device, "file"
+                )
+                payload["name"] = display_name
+                payload["ok"] = True
+                results.append(payload)
+            except Exception as exc:
+                LOGGER.exception("Falló archivo en lote | name=%s", display_name)
+                errors.append({"name": display_name, "reason": str(exc)})
+        finally:
+            shutil.rmtree(storage, ignore_errors=True)
+
+    total_seconds = round(time.perf_counter() - started, 3)
+    return jsonify(
+        {
+            "results": results,
+            "skipped": skipped,
+            "errors": errors,
+            "total_files": len(files),
+            "completed": len(results),
+            "total_seconds": total_seconds,
+            "request_id": g.request_id,
+        }
+    )
+
+
 @app.get("/api/diagnostics")
 def api_diagnostics():
     try:
@@ -591,6 +767,8 @@ def api_logs():
 
 
 @app.post("/api/client-log")
+@csrf_protect
+@rate_limit
 def api_client_log():
     data = request.get_json(silent=True) or {}
     level = str(data.get("level", "error")).lower()
@@ -630,6 +808,8 @@ def api_support_bundle():
 
 
 @app.post("/api/export/pdf")
+@csrf_protect
+@rate_limit
 def api_export_pdf():
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
@@ -664,6 +844,8 @@ def api_export_pdf():
 
 
 @app.post("/api/export/docx")
+@csrf_protect
+@rate_limit
 def api_export_docx():
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
@@ -727,6 +909,8 @@ def api_history():
 
 
 @app.post("/api/history")
+@csrf_protect
+@rate_limit
 def api_history_save():
     """Guarda una transcripción en el historial."""
     data = request.get_json(silent=True) or {}
@@ -759,6 +943,8 @@ def api_history_save():
 
 
 @app.delete("/api/history/<item_id>")
+@csrf_protect
+@rate_limit
 def api_history_delete(item_id: str):
     """Elimina una entrada del historial."""
     path = HISTORY_DIR / f"{item_id}.json"
@@ -809,6 +995,8 @@ def api_gpu_stats():
 
 
 @app.post("/api/notify")
+@csrf_protect
+@rate_limit
 def api_notify():
     """Envía una notificación al sistema (solo Windows)."""
     data = request.get_json(silent=True) or {}
@@ -843,6 +1031,8 @@ def api_languages():
 
 
 @app.post("/api/open-logs")
+@csrf_protect
+@rate_limit
 def api_open_logs():
     try:
         if os.name == "nt":
@@ -921,7 +1111,7 @@ def main() -> int:
     )
     LOGGER.info("Servidor iniciando | url=%s", url)
     print("\n" + "=" * 68)
-    print("  FERIA TRANSCRIBER 2.2")
+    print("  FERIA TRANSCRIBER 3.0")
     print(f"  Web: {url}")
     print(f"  Logs: {LOG_DIR}")
     print(

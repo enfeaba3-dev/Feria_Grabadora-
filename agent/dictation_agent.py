@@ -37,10 +37,17 @@ OVERLAP_SECONDS = 0.22
 
 
 class DictationAgent:
-    def __init__(self, server_url: str, state_path: Path, config_path: Path) -> None:
+    def __init__(
+        self,
+        server_url: str,
+        state_path: Path,
+        config_path: Path,
+        internal_token: str = "",
+    ) -> None:
         self.server_url = server_url.rstrip("/")
         self.state_path = state_path
         self.config_path = config_path
+        self.internal_token = internal_token
         self.config = load_config(config_path)
         self.settings = self.config["dictation"]
         self.hotkey = normalize_hotkey(self.settings["hotkey"])
@@ -124,6 +131,7 @@ class DictationAgent:
                 f"{self.server_url}/api/model/warmup",
                 json={"model": self.config["model"], "device": self.config["device"]},
                 timeout=10,
+                headers=self._auth_headers(),
             )
             LOGGER.info(
                 "Warmup solicitado | status=%s | body=%s",
@@ -140,7 +148,11 @@ class DictationAgent:
             return
         while not self._shutdown.wait(0.65):
             try:
-                response = requests.get(f"{self.server_url}/api/status", timeout=2.5)
+                response = requests.get(
+                    f"{self.server_url}/api/status",
+                    timeout=2.5,
+                    headers=self._auth_headers(),
+                )
                 response.raise_for_status()
                 warmup = (response.json().get("model") or {}).get("warmup") or {}
                 self.model_state = warmup
@@ -335,6 +347,11 @@ class DictationAgent:
                     return
             time.sleep(0.03)
 
+    def _auth_headers(self) -> dict:
+        if not self.internal_token:
+            return {}
+        return {"X-Internal-Token": self.internal_token}
+
     def _post_chunk(self, index: int, wav_bytes: bytes) -> str:
         import requests
 
@@ -351,6 +368,7 @@ class DictationAgent:
             files=files,
             data=data,
             timeout=(10, 3600),
+            headers=self._auth_headers(),
         )
         elapsed = time.perf_counter() - started
         LOGGER.info(
@@ -654,9 +672,17 @@ def main() -> int:
         "--state-path", default=str(ROOT / "runtime" / "agent_state.json")
     )
     parser.add_argument("--config-path", default=str(CONFIG_PATH))
+    parser.add_argument(
+        "--internal-token",
+        default="",
+        help="Shared secret to authenticate to the server API.",
+    )
     args = parser.parse_args()
     agent = DictationAgent(
-        args.server_url, Path(args.state_path), Path(args.config_path)
+        args.server_url,
+        Path(args.state_path),
+        Path(args.config_path),
+        internal_token=args.internal_token,
     )
 
     def stop_handler(_signum, _frame):

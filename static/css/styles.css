@@ -250,6 +250,22 @@ select:hover,input:hover,select:focus,input:focus{border-color:rgba(122,104,255,
 .selected-file small{margin-top:2px;color:var(--dim);font-size:10px}
 .selected-file button{color:var(--muted);font-size:18px;background:transparent}
 
+/* BATCH - carpetas / varios archivos */
+.batch-actions{display:flex;gap:8px;padding:8px 12px 0;flex-wrap:wrap}
+.batch-actions .secondary-button{flex:1;min-width:120px}
+.file-list{width:calc(100% - 24px);margin:8px 12px 0;border:1px solid var(--line);border-radius:9px;background:#111724;max-height:180px;overflow:auto}
+.file-list.hidden{display:none!important}
+.file-list-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#111724}
+.file-list-head strong{font-size:11px}
+.clear-files{border:none;background:transparent;color:#ff8d9d;font-size:10px;cursor:pointer}
+.file-list ul{list-style:none;margin:0;padding:4px 0}
+.file-list li{display:flex;align-items:center;gap:8px;padding:5px 10px;font-size:11px}
+.file-list li:hover{background:rgba(255,255,255,.02)}
+.file-item-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-list li small{color:var(--dim);flex-shrink:0}
+.file-item-remove{border:none;background:transparent;color:var(--muted);font-size:15px;cursor:pointer;flex-shrink:0}
+.file-item-remove:hover{color:#ff8d9d}
+
 /* TRANSCRIPT CARD - dentro del recorder grid, abajo */
 .transcript-card{display:flex;flex-direction:column;min-height:0}
 .transcript-card .card-heading{flex-shrink:0}
