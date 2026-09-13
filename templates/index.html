@@ -295,10 +295,6 @@
   </div>
 
   <div class="toast-stack" id="toastStack"></div>
-  <script>
-    window.FERIA_BOOTSTRAP={{ config|tojson }};
-    window.FERIA_CSRF={header:"{{ csrf_header }}",field:"{{ csrf_field }}"};
-  </script>
   <script src="{{ url_for('static',filename='js/app.js') }}"></script>
 </body>
 </html>

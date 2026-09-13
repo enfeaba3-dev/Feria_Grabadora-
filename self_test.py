@@ -76,10 +76,10 @@ def deep_audio_test()->dict:
 
 def main()->int:
     parser=argparse.ArgumentParser()
-    parser.add_argument('--quick',action='store_true',help='Pruebas rápidas sin cargar modelos')
+    parser.add_argument('--quick',action='store_true',help='Sin checks de microfono (util para CI)')
     parser.add_argument('--json',action='store_true')
     args=parser.parse_args()
-    report={'generated_at':time.strftime('%Y-%m-%d %H:%M:%S'),'core':test_core(),'diagnostics':run_diagnostics(include_audio=True)}
+    report={'generated_at':time.strftime('%Y-%m-%d %H:%M:%S'),'core':test_core(),'diagnostics':run_diagnostics(include_audio=not args.quick)}
     try:report['audio_pipeline']={'ok':True,'detail':deep_audio_test()}
     except Exception as exc:
         LOGGER.exception('Prueba real de audio falló')

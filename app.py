@@ -88,8 +88,6 @@ from diagnostics import create_support_bundle, run_diagnostics
 from model_service import ModelService
 import security
 from security import (
-    CSRF_FIELD,
-    CSRF_HEADER,
     INTERNAL_HEADER,
     apply_security_headers,
     csrf_protect,
@@ -357,14 +355,7 @@ def after_request(response):
 @app.get("/")
 def index():
     config = load_config()
-    return render_template(
-        "index.html",
-        models=AVAILABLE_MODELS,
-        config=config,
-        csrf_token=getattr(g, "csrf_token", ""),
-        csrf_header=CSRF_HEADER,
-        csrf_field=CSRF_FIELD,
-    )
+    return render_template("index.html", models=AVAILABLE_MODELS, config=config)
 
 
 @app.get("/api/status")
@@ -472,10 +463,19 @@ def api_audio_devices():
                         "default_samplerate": item.get("default_samplerate"),
                     }
                 )
+        default_device = sd.default.device
+        if not isinstance(default_device, (int, type(None))):
+            try:
+                default_device = {
+                    "input": default_device[0],
+                    "output": default_device[1],
+                }
+            except (TypeError, IndexError, KeyError):
+                default_device = str(default_device)
         return jsonify(
             {
                 "devices": devices,
-                "default": sd.default.device,
+                "default": default_device,
                 "request_id": g.request_id,
             }
         )

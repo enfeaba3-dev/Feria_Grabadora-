@@ -14,8 +14,7 @@ function readCookie(name){
 }
 function csrfHeaders(){
   const token=readCookie('feria_csrf');
-  const header=(window.FERIA_CSRF&&window.FERIA_CSRF.header)||'X-CSRF-Token';
-  return token?{[header]:token}:{};
+  return token?{['X-CSRF-Token']:token}:{};
 }
 function withCsrf(options={}){
   const method=String(options.method||'GET').toUpperCase();
@@ -26,7 +25,7 @@ function withCsrf(options={}){
   return Object.assign({credentials:'same-origin'},options);
 }
 
-let config=structuredClone(window.FERIA_BOOTSTRAP||{});
+let config={};
 let activeLog='app';
 let hotkeyCapture=false;
 let selectedFile=null;
@@ -72,7 +71,7 @@ const elements={
 
 function clientLog(level,message,context={}){
   try{
-    const csrfField=(window.FERIA_CSRF&&window.FERIA_CSRF.field)||'csrf_token';
+    const csrfField='csrf_token';
     const csrfToken=readCookie('feria_csrf');
     const payload=JSON.stringify({level,message,context:{...context,url:location.href,userAgent:navigator.userAgent},[csrfField]:csrfToken});
     navigator.sendBeacon('/api/client-log',new Blob([payload],{type:'application/json'}));
@@ -762,6 +761,14 @@ setInterval(checkModelWarmup,850);
 applyConfig(config);
 loadAudioDevices();
 refreshStatus();
+async function loadInitialConfig(){
+  try{
+    const data=await fetchJson('/api/config');
+    config=data.config||{};
+    applyConfig(config);
+  }catch(error){clientLog('error','No se pudo cargar la configuración inicial',{error:String(error)});}
+}
+loadInitialConfig();
 setInterval(refreshStatus,2500);
 setInterval(()=>{if($('#diagnosticsView').classList.contains('active'))refreshLogs();},5000);
 
