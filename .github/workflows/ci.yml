@@ -35,6 +35,52 @@ jobs:
       - name: Verify imports
         run: .venv\Scripts\python.exe -c "import flask, waitress, faster_whisper, ctranslate2, imageio_ffmpeg, sounddevice, requests, keyboard, docx, fpdf2; print('All imports OK')"
 
+  selftest:
+    name: Self test (no microphone)
+    runs-on: windows-latest
+    needs: [install]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Create venv
+        run: python -m venv .venv
+      - name: Install requirements
+        run: .venv\Scripts\python.exe -m pip install -r requirements.txt
+      - name: Run self test
+        run: .venv\Scripts\python.exe self_test.py --quick
+
+  e2e:
+    name: E2E API (model tiny)
+    runs-on: windows-latest
+    needs: [install]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Create venv
+        run: python -m venv .venv
+      - name: Install requirements
+        run: .venv\Scripts\python.exe -m pip install -r requirements.txt
+      - name: Configure CPU + tiny model
+        run: .venv\Scripts\python.exe -c "import json,pathlib; p=pathlib.Path('config.json'); cfg=json.loads(p.read_text()) if p.exists() else {}; cfg.update({'model':'tiny','device':'cpu'}); cfg.setdefault('web',{})['open_browser']=False; cfg.setdefault('dictation',{})['enabled']=False; p.write_text(json.dumps(cfg))"
+      - name: Start server
+        run: |
+          Start-Process -FilePath ".venv\Scripts\python.exe" -ArgumentList "app.py" -RedirectStandardOutput server.log -RedirectStandardError server.err -PassThru
+          Start-Sleep -Seconds 10
+      - name: Generate test audio
+        run: |
+          .venv\Scripts\python.exe -c "import math,struct,wave; sr=16000; fr=b''.join(struct.pack('<h',int(2000*math.sin(2*math.pi*440*i/sr))) for i in range(sr)); w=wave.open('test_tone.wav','wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr); w.writeframes(fr); w.close()"
+      - name: Run e2e API
+        env:
+          FERIA_E2E_MODEL: tiny
+          FERIA_E2E_EXPECT_TEXT: "0"
+        run: .venv\Scripts\python.exe tests\e2e_api.py http://127.0.0.1:5000 test_tone.wav
+
   release:
     name: Build release zip
     runs-on: windows-latest

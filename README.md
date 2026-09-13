@@ -253,6 +253,24 @@ cd Feria_Grabadora-
 
 Para CI, ver [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
+## Tests
+
+```powershell
+# Autoprueba (validacion, config, hotkeys, WAV, pipeline ffmpeg)
+.venv\Scripts\python.exe self_test.py --quick
+
+# E2E de la API (necesita el servidor arrancado y un archivo de audio
+# con voz; usa FERIA_E2E_MODEL=tiny para CI rapido)
+.venv\Scripts\python.exe tests\e2e_api.py http://127.0.0.1:5000 prueba.wav
+
+# En CI sin audio de voz: omite los checks de texto transcrito
+$env:FERIA_E2E_EXPECT_TEXT="0"
+.venv\Scripts\python.exe tests\e2e_api.py http://127.0.0.1:5000 tono.wav
+```
+
+El CI ejecuta `self_test --quick` y el e2e de la API con el modelo `tiny`
+en CPU en cada push a `main`.
+
 ## Reporte de vulnerabilidades
 
 Si encuentras un problema de seguridad, **no abras un issue publico**.

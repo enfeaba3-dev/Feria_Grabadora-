@@ -5,6 +5,32 @@ Todos los cambios notables de Feria Transcriber se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y el proyecto sigue [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.0.1] - 2026-09-13
+
+### Corregido
+- **500 en `/api/audio-devices`**: `sd.default.device` devuelve
+  `_InputOutputPair` (no serializable por JSON). Ahora se expone como
+  `{"input": ..., "output": ...}`. El frontend solo usaba `devices[]`, así
+  que no hay cambio de contrato.
+- **CSP bloqueaba el bootstrap de la UI**: el script inline
+  (`window.FERIA_BOOTSTRAP`/`FERIA_CSRF`) violaba `script-src 'self'`, así
+  que la UI arrancaba con la configuración por defecto en vez de la del
+  servidor. Se eliminó el script inline; `app.js` carga `/api/config` al
+  iniciar. Eliminadas las variables `csrf_token`/`csrf_header`/`csrf_field`
+  de `index()` y el import de `CSRF_HEADER`/`CSRF_FIELD` en `app.py`.
+- **`self_test.py --quick` no hacía nada**: ignoraba `args.quick`. Ahora
+  omite los checks de micrófono (`include_audio=False`), pensado para CI.
+
+### Añadido
+- **`tests/e2e_api.py`**: e2e HTTP de toda la API (37 checks): cabeceras de
+  seguridad, CSRF (sin token 403), allowlist de extensiones (415), modelo
+  inválido (400), transcripción real, historial, export PDF/DOCX, sanado de
+  config, rate limit (429) y token interno del agente. El nombre del modelo
+  se configura con `FERIA_E2E_MODEL` y el check de texto con
+  `FERIA_E2E_EXPECT_TEXT` (útil en CI sin voz de prueba).
+- **Jobs CI**: `selftest` (self_test --quick) y `e2e` (arranca el servidor
+  con modelo `tiny` en CPU y corre `tests/e2e_api.py`).
+
 ## [3.0.0] - 2026-07-23
 
 ### Añadido
