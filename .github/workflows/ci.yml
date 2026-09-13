@@ -33,7 +33,7 @@ jobs:
       - name: Install requirements
         run: .venv\Scripts\python.exe -m pip install -r requirements.txt
       - name: Verify imports
-        run: .venv\Scripts\python.exe -c "import flask, waitress, faster_whisper, ctranslate2, imageio_ffmpeg, sounddevice, requests, keyboard, docx, fpdf2; print('All imports OK')"
+        run: .venv\Scripts\python.exe -c "import flask, waitress, faster_whisper, ctranslate2, imageio_ffmpeg, sounddevice, requests, keyboard, docx, fpdf; print('All imports OK')"
 
   selftest:
     name: Self test (no microphone)
